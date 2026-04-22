@@ -40,7 +40,7 @@ efinance-go/
 ### 安装
 
 ```bash
-go get github.com/efinance/efinance/efinance/stock
+go get github.com/T1anjiu/efinance-go/efinance/stock
 ```
 
 ### 获取实时行情
@@ -51,7 +51,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/efinance/efinance/efinance/stock"
+    "github.com/T1anjiu/efinance-go/efinance/stock"
 )
 
 func main() {
@@ -85,8 +85,8 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/efinance/efinance/efinance/common"
-    "github.com/efinance/efinance/efinance/stock"
+    "github.com/T1anjiu/efinance-go/efinance/common"
+    "github.com/T1anjiu/efinance-go/efinance/stock"
 )
 
 func main() {
@@ -136,7 +136,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/efinance/efinance/efinance/stock"
+    "github.com/T1anjiu/efinance-go/efinance/stock"
 )
 
 func main() {
