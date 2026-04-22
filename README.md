@@ -40,7 +40,7 @@ efinance-go/
 ### 安装
 
 ```bash
-go get github.com/T1anjiu/efinance-go/efinance/stock
+go get github.com/T1anjiu/efinance-go/efinance/stock@v0.1.0
 ```
 
 ### 获取实时行情
