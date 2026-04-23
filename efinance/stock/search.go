@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/efinance/efinance/efinance/common"
-	"github.com/efinance/efinance/efinance/errors"
+	"github.com/T1anjiu/efinance-go/efinance/common"
+    "github.com/T1anjiu/efinance-go/efinance/errors"
 )
 
 // Search 搜索股票

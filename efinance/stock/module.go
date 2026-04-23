@@ -3,7 +3,7 @@ package stock
 import (
 	"context"
 
-	"github.com/efinance/efinance/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/common"
 )
 
 // Module 股票模块
