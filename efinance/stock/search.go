@@ -18,7 +18,7 @@ func Search(ctx context.Context, keyword string, marketType common.MarketType) (
 	params := map[string]string{
 		"InputTip": keyword,
 		"Type":     "14",
-		"Token":    "894050c76af8597a853f5b408b759f5d",
+		"Token":    common.EastMoneySearchToken,
 		"MktNum":   "f1",
 		"Idx":      "idx",
 		"No":       "n1",

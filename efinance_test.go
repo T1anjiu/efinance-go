@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/efinance/efinance/efinance/stock"
+	"github.com/T1anjiu/efinance-go/efinance/stock"
 )
 
 // 测试获取K线数据

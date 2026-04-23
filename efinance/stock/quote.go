@@ -130,7 +130,7 @@ func parseTencentRealtimeResponse(raw []byte) ([]QuoteItem, error) {
 		dataPart := strings.Trim(parts[1], ";\""+" ")
 		fields := strings.Split(dataPart, "~")
 
-		if len(fields) < 10 {
+		if len(fields) < 35 {
 			continue
 		}
 

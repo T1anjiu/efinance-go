@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/T1anjiu/efinance-go/efinance/errors"
@@ -18,7 +17,6 @@ import (
 // HTTPClient HTTP客户端
 type HTTPClient struct {
 	client  *http.Client
-	mu      sync.Mutex
 	retries int
 }
 
@@ -45,10 +43,6 @@ func NewHTTPClient(maxConn, retries int) *HTTPClient {
 
 // GetJSON GET请求JSON
 func (c *HTTPClient) GetJSON(ctx context.Context, url string, params map[string]string, headers http.Header) (*json.RawMessage, error) {
-	c.mu.Lock()
-	c.client.Timeout = RequestTimeout
-	c.mu.Unlock()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -135,10 +129,6 @@ func (c *HTTPClient) GetJSON(ctx context.Context, url string, params map[string]
 
 // PostJSON POST请求JSON
 func (c *HTTPClient) PostJSON(ctx context.Context, url string, data interface{}, headers http.Header) (*json.RawMessage, error) {
-	c.mu.Lock()
-	c.client.Timeout = RequestTimeout
-	c.mu.Unlock()
-
 	var body io.Reader
 	if data != nil {
 		jsonData, err := json.Marshal(data)
@@ -220,10 +210,6 @@ func (c *HTTPClient) PostJSON(ctx context.Context, url string, data interface{},
 
 // PostForm postForm请求
 func (c *HTTPClient) PostForm(ctx context.Context, url string, data url.Values, headers http.Header) (*json.RawMessage, error) {
-	c.mu.Lock()
-	c.client.Timeout = RequestTimeout
-	c.mu.Unlock()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -301,10 +287,6 @@ func DefaultClient() *HTTPClient {
 
 // GetRaw GET请求返回原始字节数据（不解析JSON）
 func (c *HTTPClient) GetRaw(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
-	c.mu.Lock()
-	c.client.Timeout = RequestTimeout
-	c.mu.Unlock()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)

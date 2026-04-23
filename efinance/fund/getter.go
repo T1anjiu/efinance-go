@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/efinance/efinance/efinance/common"
-	"github.com/efinance/efinance/efinance/errors"
+	"github.com/T1anjiu/efinance-go/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/errors"
 )
 
 // FundHeaders 天天基金请求头

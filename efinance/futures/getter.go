@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/efinance/efinance/efinance/common"
-	"github.com/efinance/efinance/efinance/errors"
+	"github.com/T1anjiu/efinance-go/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/errors"
 )
 
 // FuturesInfo 期货信息

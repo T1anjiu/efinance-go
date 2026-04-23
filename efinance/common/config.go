@@ -2,6 +2,8 @@ package common
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,19 +27,59 @@ const (
 	FundRealtimeURL  = "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo"
 	FundListURL      = "https://fund.eastmoney.com/data/rankhandler"
 
-	// 请求超时时间
-	RequestTimeout = 180 * time.Second
-
-	// 最大并发数
-	MaxConnections = 20
-
-	// 重试次数
-	MaxRetries = 3
-
 	// 默认日期范围
 	DefaultBegDate = "19000101"
 	DefaultEndDate = "20500101"
 )
+
+// 从配置获取动态值
+var (
+	// RequestTimeout 请求超时时间
+	RequestTimeout = getDurationEnv("REQUEST_TIMEOUT", 180*time.Second)
+
+	// MaxConnections 最大并发数
+	MaxConnections = getIntEnv("MAX_CONNECTIONS", 20)
+
+	// MaxRetries 重试次数
+	MaxRetries = getIntEnv("MAX_RETRIES", 3)
+
+	// EastMoneySearchToken 东方财富搜索API Token
+	EastMoneySearchToken = getEnv("EASTMONEY_SEARCH_TOKEN", "894050c76af8597a853f5b408b759f5d")
+
+	// QuoteIDCacheTTL 行情ID缓存TTL
+	QuoteIDCacheTTL = getDurationEnv("QUOTEID_CACHE_TTL", 24*time.Hour)
+
+	// SearchCacheTTL 搜索缓存TTL
+	SearchCacheTTL = getDurationEnv("SEARCH_CACHE_TTL", 1*time.Hour)
+)
+
+// getEnv 获取环境变量，如果不存在则返回默认值
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getIntEnv 获取整数环境变量
+func getIntEnv(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return intVal
+		}
+	}
+	return defaultValue
+}
+
+// getDurationEnv 获取时长环境变量
+func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
+		}
+	}
+	return defaultValue
+}
 
 // HTTPHeaders EastMoney请求头
 var HTTPHeaders = http.Header{
@@ -96,37 +138,6 @@ var FSMarketDict = map[string]string{
 	"概念板块":    "m:90 t:10",
 }
 
-// QuoteIDCache 行情ID缓存
-type QuoteIDCache struct {
-	mu    sync.RWMutex
-	cache map[string]string // code -> quoteId
-}
-
-var quoteIDCache = &QuoteIDCache{
-	cache: make(map[string]string),
-}
-
-// GetQuoteID 获取缓存的行情ID
-func (c *QuoteIDCache) Get(code string) (string, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	id, ok := c.cache[code]
-	return id, ok
-}
-
-// SetQuoteID 设置行情ID缓存
-func (c *QuoteIDCache) Set(code, quoteID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.cache[code] = quoteID
-}
-
-// SearchCache 搜索结果缓存
-type SearchCache struct {
-	mu    sync.RWMutex
-	cache map[string]SearchResult
-}
-
 // SearchResult 搜索结果
 type SearchResult struct {
 	Code     string `json:"code"`
@@ -136,23 +147,136 @@ type SearchResult struct {
 	SecuType string `json:"secu_type"`
 }
 
+// QuoteIDCache 行情ID缓存
+type QuoteIDCache struct {
+	mu       sync.RWMutex
+	cache    map[string]*cacheEntry
+	ttl      time.Duration
+}
+
+type cacheEntry struct {
+	value      string
+	expireTime time.Time
+}
+
+var quoteIDCache = &QuoteIDCache{
+	cache: make(map[string]*cacheEntry),
+	ttl:   QuoteIDCacheTTL,
+}
+
+// GetQuoteID 获取缓存的行情ID
+func (c *QuoteIDCache) Get(code string) (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.cache[code]
+	if !ok {
+		return "", false
+	}
+
+	// 检查是否过期
+	if time.Now().After(entry.expireTime) {
+		return "", false
+	}
+
+	return entry.value, true
+}
+
+// SetQuoteID 设置行情ID缓存
+func (c *QuoteIDCache) Set(code, quoteID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.cache[code] = &cacheEntry{
+		value:      quoteID,
+		expireTime: time.Now().Add(c.ttl),
+	}
+}
+
+// Clear 清空缓存
+func (c *QuoteIDCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache = make(map[string]*cacheEntry)
+}
+
+// Cleanup 清理过期缓存
+func (c *QuoteIDCache) Cleanup() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	for key, entry := range c.cache {
+		if now.After(entry.expireTime) {
+			delete(c.cache, key)
+		}
+	}
+}
+
+// SearchCache 搜索结果缓存
+type SearchCache struct {
+	mu    sync.RWMutex
+	cache map[string]*searchCacheEntry
+	ttl   time.Duration
+}
+
+type searchCacheEntry struct {
+	result     SearchResult
+	expireTime time.Time
+}
+
 var searchCache = &SearchCache{
-	cache: make(map[string]SearchResult),
+	cache: make(map[string]*searchCacheEntry),
+	ttl:   SearchCacheTTL,
 }
 
 // Get 获取缓存的搜索结果
 func (c *SearchCache) Get(key string) (SearchResult, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result, ok := c.cache[key]
-	return result, ok
+
+	entry, ok := c.cache[key]
+	if !ok {
+		return SearchResult{}, false
+	}
+
+	// 检查是否过期
+	if time.Now().After(entry.expireTime) {
+		return SearchResult{}, false
+	}
+
+	return entry.result, true
 }
 
 // Set 设置搜索结果缓存
 func (c *SearchCache) Set(key string, result SearchResult) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cache[key] = result
+
+	c.cache[key] = &searchCacheEntry{
+		result:     result,
+		expireTime: time.Now().Add(c.ttl),
+	}
+}
+
+// Clear 清空缓存
+func (c *SearchCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache = make(map[string]*searchCacheEntry)
+}
+
+// Cleanup 清理过期缓存
+func (c *SearchCache) Cleanup() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	for key, entry := range c.cache {
+		if now.After(entry.expireTime) {
+			delete(c.cache, key)
+		}
+	}
 }
 
 // DefaultSearchCache 获取默认搜索缓存

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/efinance/efinance/efinance/common"
-	"github.com/efinance/efinance/efinance/errors"
+	"github.com/T1anjiu/efinance-go/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/errors"
 )
 
 // BondInfo 债券信息

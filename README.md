@@ -2,7 +2,7 @@
 
 > 基于 [efinance](https://github.com/Micro-sheep/efinance) 的 Go 语言移植版本
 >
-> 数据源变更：原项目使用东方财富行情，本项目改用腾讯行情API
+> **数据源**：使用腾讯行情API（实时行情、K线数据）和东方财富API（股票搜索）
 
 一个纯 Go 实现的股票行情数据获取库，专注于从公开金融API获取实时行情和K线数据。
 
@@ -16,6 +16,9 @@
 - 🗂️ **多市场支持** - 沪深A股、期货、基金、债券
 - 🔄 **复权支持** - 前复权、后复权、不复权
 - ⚡ **并发获取** - 支持批量股票并行请求
+- 🎯 **配置管理** - 支持环境变量配置
+- 💾 **智能缓存** - 内置缓存机制，支持过期清理
+- 🛡️ **错误处理** - 完善的错误处理和边界检查
 
 ## 项目结构
 
@@ -23,16 +26,31 @@
 efinance-go/
 ├── efinance/
 │   ├── stock/          # 股票模块
-│   │   ├── kline.go    # K线数据
-│   │   ├── quote.go    # 实时行情
-│   │   └── search.go   # 股票搜索
+│   │   ├── kline.go    # K线数据获取
+│   │   ├── quote.go    # 实时行情获取
+│   │   ├── search.go   # 股票搜索
+│   │   └── module.go   # 模块定义
 │   ├── futures/        # 期货模块
+│   │   ├── getter.go   # 期货数据获取
+│   │   └── module.go   # 模块定义
 │   ├── fund/           # 基金模块
+│   │   ├── getter.go   # 基金数据获取
+│   │   └── module.go   # 模块定义
 │   ├── bond/           # 债券模块
-│   ├── common/         # 公共组件 (HTTP客户端、类型定义)
+│   │   ├── getter.go   # 债券数据获取
+│   │   └── module.go   # 模块定义
+│   ├── common/         # 公共组件
+│   │   ├── client.go   # HTTP客户端
+│   │   ├── config.go   # 配置管理
+│   │   └── types.go    # 类型定义
 │   └── errors/         # 错误定义
-├── efinance_test.go     # 测试文件
-└── go.mod
+│       └── errors.go   # 错误类型
+├── efinance_test.go     # 原始测试文件
+├── efinance_fix_test.go # 修复后的增强测试
+├── debug_test.go        # API调试测试
+├── network_test.go      # 网络连接测试
+├── FIXES.md             # 修复报告
+└── go.mod               # Go模块文件
 ```
 
 ## 快速开始
@@ -72,9 +90,9 @@ func main() {
 
 **输出示例**：
 ```
-贵州茅台 (600519): ¥1409.50 (-0.18%)
-招商银行 (600036): ¥39.74 (-0.33%)
-平安银行 (000001): ¥10.98 (-0.90%)
+贵州茅台 (600519): ¥1415.53 (0.43%)
+招商银行 (600036): ¥39.70 (-0.10%)
+平安银行 (000001): ¥10.99 (0.09%)
 ```
 
 ### 获取K线数据
@@ -95,7 +113,7 @@ func main() {
     params := stock.GetKlineParams{
         Code:       "600519",
         Beg:        "2024-01-01",
-        End:        "2024-12-31",
+        End:        "2024-01-31",
         KlineType:  common.KlineDaily,
         AdjustType: common.AdjsFront,
     }
@@ -122,9 +140,9 @@ func main() {
 **输出示例**：
 ```
 股票: 贵州茅台 (600519), 共 22 条数据
-  2024-11-29  开:1485.00 高:1500.00 低:1478.50 收:1495.20 量:3.20万
-  2024-12-02  开:1490.00 高:1498.00 低:1482.00 收:1488.50 量:2.85万
-  2024-12-03  开:1488.00 高:1495.00 低:1480.00 收:1492.30 量:3.10万
+  2024-01-02  开:1608.69 高:1611.88 低:1571.79 收:1578.70 量:32156
+  2024-01-03  开:1574.80 高:1588.91 低:1570.02 收:1587.69 量:20229
+  2024-01-04  开:1586.69 高:1586.69 低:1556.62 收:1562.69 量:21551
   ...
 ```
 
@@ -142,13 +160,13 @@ import (
 func main() {
     ctx := context.Background()
     
-    results, err := stock.SearchStock(ctx, "贵州茅台")
+    results, err := stock.Search(ctx, "茅台", "")
     if err != nil {
         panic(err)
     }
     
     for _, r := range results {
-        fmt.Printf("代码: %s 名称: %s 市场: %s\n", r.Code, r.Name, r.Market)
+        fmt.Printf("代码: %s 名称: %s 市场: %s\n", r.Code, r.Name, r.MktType)
     }
 }
 ```
@@ -169,6 +187,8 @@ func main() {
 | `End` | string | 结束日期 `YYYY-MM-DD` | 空（当前） |
 | `KlineType` | `KlineType` | K线周期 | `KlineDaily` |
 | `AdjustType` | `AdjsType` | 复权类型 | `AdjsFront` |
+| `MarketType` | `MarketType` | 市场类型筛选 | 空 |
+| `SuppressErr` | bool | 遇到错误是否静默 | `false` |
 
 **K线周期** `KlineType`:
 ```go
@@ -259,23 +279,79 @@ type QuoteItem struct {
 }
 ```
 
+#### `GetRealtimeQuotes(ctx, params) ([]QuoteItem, error)`
+
+获取实时行情（支持市场类型筛选）。
+
+```go
+params := stock.QuoteParams{
+    Markets: []string{"沪深A股", "上证A股"},
+}
+quotes, _ := stock.GetRealtimeQuotes(ctx, params)
+```
+
 ### 股票搜索
 
-#### `SearchStock(ctx, keyword) ([]SearchResult, error)`
+#### `Search(ctx, keyword, marketType) ([]SearchResult, error)`
 
 通过关键词搜索股票。
 
 ```go
-results, _ := stock.SearchStock(ctx, "茅台")
+results, _ := stock.Search(ctx, "茅台", "")
+```
+
+#### `GetQuoteID(ctx, code, marketType) (string, error)`
+
+获取股票的行情ID。
+
+```go
+quoteID, _ := stock.GetQuoteID(ctx, "600519", "")
+```
+
+## 配置管理
+
+### 环境变量配置
+
+```bash
+# API配置
+export EASTMONEY_SEARCH_TOKEN="your_token"
+
+# HTTP配置
+export REQUEST_TIMEOUT="30s"
+export MAX_CONNECTIONS="20"
+export MAX_RETRIES="3"
+
+# 缓存配置
+export QUOTEID_CACHE_TTL="24h"
+export SEARCH_CACHE_TTL="1h"
+```
+
+### 运行时配置
+
+```go
+import "github.com/T1anjiu/efinance-go/efinance/common"
+
+// 修改HTTP客户端配置
+common.SetRequestTimeout(30 * time.Second)
+common.SetMaxConnections(20)
+common.SetMaxRetries(3)
+
+// 修改缓存配置
+common.SetQuoteIDCacheTTL(24 * time.Hour)
+common.SetSearchCacheTTL(1 * time.Hour)
+
+// 清理缓存
+common.DefaultQuoteIDCache().Cleanup()
+common.DefaultSearchCache().Clear()
 ```
 
 ## 数据源
 
-| 数据类型 | API | 域名 |
-|---------|-----|------|
-| 实时行情 | 腾讯行情 | `qt.gtimg.cn` |
-| K线数据 | 腾讯/ifzq | `web.ifzq.gtimg.cn` |
-| 股票搜索 | 东方财富 | `search-codename.eastmoney.com` |
+| 数据类型 | API | 域名 | 说明 |
+|---------|-----|------|------|
+| 实时行情 | 腾讯行情 | `qt.gtimg.cn` | 获取股票实时价格、涨跌幅等 |
+| K线数据 | 腾讯/ifzq | `web.ifzq.gtimg.cn` | 获取历史K线数据 |
+| 股票搜索 | 东方财富 | `searchapi.eastmoney.com` | 搜索股票代码和名称 |
 
 ## 注意事项
 
@@ -283,18 +359,88 @@ results, _ := stock.SearchStock(ctx, "茅台")
 2. **市场前缀**：上海 `sh`、深圳 `sz`、北京 `bj`
 3. **网络要求**：需要能访问腾讯/东方财富域名
 4. **请求频率**：请合理控制请求频率，避免对API造成压力
+5. **数据准确性**：数据来源于第三方API，可能存在延迟或错误，请以官方数据为准
+6. **边界检查**：代码已实现数组边界检查，不会出现越界panic
+7. **缓存机制**：内置缓存机制，可减少API请求次数
 
 ## 测试
 
-```bash
-# 运行所有测试
-go test ./...
+### 运行所有测试
 
-# 运行特定测试
-go test -v -run "TestGetKline"
-go test -v -run "TestRealtimeQuote"
+```bash
+cd efinance-go
+go test -v
 ```
+
+### 运行特定测试
+
+```bash
+# 功能测试
+go test -v -run TestGetKline
+go test -v -run TestGetLatestQuote
+go test -v -run TestSearch
+
+# 增强测试
+go test -v -run TestGetKlineWithRetry
+go test -v -run TestGetLatestQuoteWithBoundsCheck
+go test -v -run TestConcurrentRequests
+go test -v -run TestErrorHandling
+
+# 调试测试
+go test -v -run TestDebugKlineURL
+go test -v -run TestMyCodeURL
+go test -v -run TestNetwork
+```
+
+### 测试覆盖
+
+- ✅ K线数据获取
+- ✅ 实时行情获取
+- ✅ 股票搜索
+- ✅ 并发请求
+- ✅ 错误处理
+- ✅ 边界检查
+- ✅ 网络连接
+
+## 版本历史
+
+### v0.1.1 (2024-04-23)
+
+**修复**：
+- 修复导入路径错误，解决编译失败问题
+- 修复数组越界风险，添加边界检查
+- 修复缓存内存泄漏，添加过期机制
+- 优化HTTP客户端，移除不必要的锁
+- 改进错误处理，提供更详细的错误信息
+
+**新增**：
+- 添加配置管理功能，支持环境变量
+- 添加缓存过期机制，支持TTL配置
+- 添加增强测试用例，提高测试覆盖率
+- 添加修复报告文档
+
+**清理**：
+- 删除冗余文件（fund.go、efinance/go.mod、efinance/cache/）
+- 优化项目结构，提高可维护性
+
+### v0.1.0 (2024-04-22)
+
+**初始版本**：
+- 基础K线数据获取
+- 实时行情获取
+- 股票搜索功能
+- 多市场支持
 
 ## 许可证
 
 MIT License
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 致谢
+
+- 原项目 [efinance](https://github.com/Micro-sheep/efinance) - Python版本
+- 腾讯财经 - 提供行情数据API
+- 东方财富 - 提供搜索API

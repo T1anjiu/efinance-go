@@ -3,7 +3,7 @@ package futures
 import (
 	"context"
 
-	"github.com/efinance/efinance/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/common"
 )
 
 // Module 期货模块

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/efinance/efinance/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/common"
 )
 
 // 调试URL生成和请求

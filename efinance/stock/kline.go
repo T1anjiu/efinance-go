@@ -149,13 +149,13 @@ func parseTencentKlineResponse(raw []byte, code string) (*KlineResult, error) {
 	// 找到第一个 { 的位置
 	startIdx := strings.Index(jsonStr, "{")
 	if startIdx == -1 {
-		return nil, errors.ErrParse
+		return nil, fmt.Errorf("%w: 未找到JSON起始标记", errors.ErrParse)
 	}
 
 	// 找到最后一个 } 的位置
 	endIdx := strings.LastIndex(jsonStr, "}")
 	if endIdx == -1 {
-		return nil, errors.ErrParse
+		return nil, fmt.Errorf("%w: 未找到JSON结束标记", errors.ErrParse)
 	}
 
 	jsonStr = jsonStr[startIdx : endIdx+1]
@@ -163,13 +163,13 @@ func parseTencentKlineResponse(raw []byte, code string) (*KlineResult, error) {
 	// 解析为通用map结构
 	var resp map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &resp); err != nil {
-		return nil, errors.ErrParse
+		return nil, fmt.Errorf("%w: JSON解析失败 - %v", errors.ErrParse, err)
 	}
 
 	// 获取data字段
 	data, ok := resp["data"].(map[string]interface{})
 	if !ok {
-		return nil, errors.ErrParse
+		return nil, fmt.Errorf("%w: 响应中缺少data字段", errors.ErrParse)
 	}
 
 	// 获取第一个股票数据（key是动态的）
@@ -191,7 +191,7 @@ func parseTencentKlineResponse(raw []byte, code string) (*KlineResult, error) {
 	}
 
 	if len(days) == 0 {
-		return nil, errors.ErrNoData
+		return nil, fmt.Errorf("%w: 未找到K线数据", errors.ErrNoData)
 	}
 
 	items := make([]common.KlineItem, 0, len(days))
