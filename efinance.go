@@ -6,10 +6,10 @@
 package efinance
 
 import (
-	"github.com/efinance/efinance/efinance/bond"
-	"github.com/efinance/efinance/efinance/fund"
-	"github.com/efinance/efinance/efinance/futures"
-	"github.com/efinance/efinance/efinance/stock"
+	"github.com/T1anjiu/efinance-go/efinance/bond"
+	"github.com/T1anjiu/efinance-go/efinance/fund"
+	"github.com/T1anjiu/efinance-go/efinance/futures"
+	"github.com/T1anjiu/efinance-go/efinance/stock"
 )
 
 // Stock 股票模块
