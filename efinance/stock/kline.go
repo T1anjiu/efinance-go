@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-    "github.com/T1anjiu/efinance-go/efinance/common"
-    "github.com/T1anjiu/efinance-go/efinance/errors"
+	"github.com/T1anjiu/efinance-go/efinance/common"
+	"github.com/T1anjiu/efinance-go/efinance/errors"
 )
 
 // GetKlineParams K线查询参数
@@ -33,59 +33,34 @@ type KlineResult struct {
 // GetKline 获取单只股票K线数据
 func GetKline(ctx context.Context, params GetKlineParams) (*KlineResult, error) {
 	if params.Beg == "" {
-		params.Beg = "2024-01-01"
+		params.Beg = common.DefaultBegDate
 	}
 	if params.End == "" {
-		params.End = ""
+		params.End = common.DefaultEndDate
 	}
 	if params.KlineType == 0 {
 		params.KlineType = common.KlineDaily
 	}
 
-	code := params.Code
+	secid := common.GetSecid(params.Code)
 
-	// 如果不是市场前缀格式，需要添加
-	marketPrefix := getMarketPrefix(code)
-	apiCode := code
-	if !strings.Contains(code, "_") && !strings.HasPrefix(code, "sh") && !strings.HasPrefix(code, "sz") {
-		apiCode = marketPrefix + code
+	queryParams := map[string]string{
+		"fields1": "f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13",
+		"fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+		"beg":     params.Beg,
+		"end":     params.End,
+		"rtntype": "6",
+		"secid":   secid,
+		"klt":     strconv.Itoa(int(params.KlineType)),
+		"fqt":     strconv.Itoa(int(params.AdjustType)),
 	}
 
-	// 获取K线周期字符串
-	klinePeriod := getKlinePeriod(params.KlineType)
-	if klinePeriod == "" {
-		klinePeriod = "day"
-	}
-
-	// 获取复权类型
-	fq := "qfq"
-	if params.AdjustType == common.AdjsNone {
-		fq = ""
-	} else if params.AdjustType == common.AdjsFront {
-		fq = "qfq"
-	} else if params.AdjustType == common.AdjsBack {
-		fq = "hfq"
-	}
-
-	// 构建腾讯API URL
-	url := fmt.Sprintf("%s?_var=kline_%s&param=%s,%s,%s,%s,100,%s",
-		common.TencentKlineURL,
-		klinePeriod+fq,
-		strings.ToLower(apiCode),
-		klinePeriod,
-		params.Beg,
-		params.End,
-		fq,
-	)
-
-	raw, err := common.DefaultClient().GetRaw(ctx, url, map[string]string{
-		"Referer": "https://finance.qq.com/",
-	})
+	raw, err := common.DefaultClient().GetJSON(ctx, common.EastMoneyKlineURL, queryParams, common.HTTPHeaders)
 	if err != nil {
 		return nil, err
 	}
 
-	return parseTencentKlineResponse(raw, code)
+	return parseEastMoneyKline(raw, secid)
 }
 
 // GetKlineMulti 获取多只股票K线数据
@@ -134,154 +109,70 @@ func GetKlineMulti(ctx context.Context, params []GetKlineParams, workers int) (m
 	}
 
 	if len(errs) > 0 {
-		return klines, errs[0]
+		return klines, fmt.Errorf("批量请求 %d 个失败: %v", len(errs), errs)
 	}
 
 	return klines, nil
 }
 
-// parseTencentKlineResponse 解析腾讯K线响应
-// 响应格式: var kline_dayqfq={...};
-func parseTencentKlineResponse(raw []byte, code string) (*KlineResult, error) {
-	// 去掉JSONP包装: var xxx={...};
-	jsonStr := string(raw)
-
-	// 找到第一个 { 的位置
-	startIdx := strings.Index(jsonStr, "{")
-	if startIdx == -1 {
-		return nil, fmt.Errorf("%w: 未找到JSON起始标记", errors.ErrParse)
+// parseEastMoneyKline 解析东方财富K线响应
+func parseEastMoneyKline(raw *json.RawMessage, secid string) (*KlineResult, error) {
+	var resp struct {
+		Data struct {
+			Code   string   `json:"code"`
+			Name   string   `json:"name"`
+			Klines []string `json:"klines"`
+		} `json:"data"`
 	}
 
-	// 找到最后一个 } 的位置
-	endIdx := strings.LastIndex(jsonStr, "}")
-	if endIdx == -1 {
-		return nil, fmt.Errorf("%w: 未找到JSON结束标记", errors.ErrParse)
-	}
-
-	jsonStr = jsonStr[startIdx : endIdx+1]
-
-	// 解析为通用map结构
-	var resp map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &resp); err != nil {
+	if err := json.Unmarshal(*raw, &resp); err != nil {
 		return nil, fmt.Errorf("%w: JSON解析失败 - %v", errors.ErrParse, err)
 	}
 
-	// 获取data字段
-	data, ok := resp["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("%w: 响应中缺少data字段", errors.ErrParse)
+	if len(resp.Data.Klines) == 0 {
+		return nil, errors.ErrNoData
 	}
 
-	// 获取第一个股票数据（key是动态的）
-	var days [][]interface{}
-	var name string
-	for key, val := range data {
-		if dayData, ok := val.(map[string]interface{}); ok {
-			if dayArr, ok := dayData["day"].([]interface{}); ok {
-				days = make([][]interface{}, len(dayArr))
-				for i, d := range dayArr {
-					if arr, ok := d.([]interface{}); ok {
-						days[i] = arr
-					}
-				}
-				name = key
-				break
-			}
-		}
-	}
+	code := strings.Split(secid, ".")[1]
+	items := make([]common.KlineItem, 0, len(resp.Data.Klines))
 
-	if len(days) == 0 {
-		return nil, fmt.Errorf("%w: 未找到K线数据", errors.ErrNoData)
-	}
-
-	items := make([]common.KlineItem, 0, len(days))
-	for _, d := range days {
-		if len(d) < 6 {
+	for _, kline := range resp.Data.Klines {
+		fields := strings.Split(kline, ",")
+		if len(fields) < 11 {
 			continue
 		}
 
-		dateStr := toString(d[0])
-		open, _ := strconv.ParseFloat(toString(d[1]), 64)
-		close, _ := strconv.ParseFloat(toString(d[2]), 64)
-		high, _ := strconv.ParseFloat(toString(d[3]), 64)
-		low, _ := strconv.ParseFloat(toString(d[4]), 64)
-		volume, _ := strconv.ParseFloat(toString(d[5]), 64)
-
-		var amount float64
-		if len(d) > 6 {
-			amount, _ = strconv.ParseFloat(toString(d[6]), 64)
-		}
+		open, _ := strconv.ParseFloat(fields[1], 64)
+		close, _ := strconv.ParseFloat(fields[2], 64)
+		high, _ := strconv.ParseFloat(fields[3], 64)
+		low, _ := strconv.ParseFloat(fields[4], 64)
+		volume, _ := strconv.ParseFloat(fields[5], 64)
+		amount, _ := strconv.ParseFloat(fields[6], 64)
+		amplitude, _ := strconv.ParseFloat(fields[7], 64)
+		changePct, _ := strconv.ParseFloat(fields[8], 64)
+		changeAmt, _ := strconv.ParseFloat(fields[9], 64)
+		turnoverRate, _ := strconv.ParseFloat(fields[10], 64)
 
 		items = append(items, common.KlineItem{
-			Code:   code,
-			Name:   name,
-			Date:   dateStr,
-			Open:   open,
-			Close:  close,
-			High:   high,
-			Low:    low,
-			Volume: volume,
-			Amount: amount,
+			Code:         code,
+			Name:         resp.Data.Name,
+			Date:         fields[0],
+			Open:         open,
+			Close:        close,
+			High:         high,
+			Low:          low,
+			Volume:       volume,
+			Amount:       amount,
+			Amplitude:    amplitude,
+			ChangePCT:    changePct,
+			ChangeAmt:    changeAmt,
+			TurnoverRate: turnoverRate,
 		})
 	}
 
 	return &KlineResult{
 		Code:  code,
-		Name:  name,
+		Name:  resp.Data.Name,
 		Items: items,
 	}, nil
-}
-
-// getMarketPrefix 根据股票代码获取市场前缀
-func getMarketPrefix(code string) string {
-	code = strings.ToUpper(code)
-	if len(code) == 6 {
-		switch {
-		case strings.HasPrefix(code, "6"):
-			return "sh"
-		case strings.HasPrefix(code, "0"), strings.HasPrefix(code, "3"):
-			return "sz"
-		case strings.HasPrefix(code, "4"), strings.HasPrefix(code, "8"):
-			return "bj"
-		}
-	}
-	return "sh"
-}
-
-// getKlinePeriod 将K线类型转换为腾讯API的周期字符串
-func getKlinePeriod(klt common.KlineType) string {
-	switch klt {
-	case common.KlineDaily:
-		return "day"
-	case common.KlineWeekly:
-		return "week"
-	case common.KlineMonthly:
-		return "month"
-	case common.Kline1Min:
-		return "1min"
-	case common.Kline5Min:
-		return "5min"
-	case common.Kline15Min:
-		return "15min"
-	case common.Kline30Min:
-		return "30min"
-	case common.Kline60Min:
-		return "60min"
-	default:
-		return "day"
-	}
-}
-
-func toString(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-	switch val := v.(type) {
-	case string:
-		return val
-	case float64:
-		return strconv.FormatFloat(val, 'f', -1, 64)
-	default:
-		return fmt.Sprintf("%v", val)
-	}
 }

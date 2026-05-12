@@ -3,6 +3,7 @@ package fund
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -103,7 +104,7 @@ func GetQuoteHistoryMulti(ctx context.Context, fundCodes []string, pageSize int)
 	}
 
 	if len(errs) > 0 {
-		return data, errs[0]
+		return data, fmt.Errorf("批量请求 %d 个失败: %v", len(errs), errs)
 	}
 
 	return data, nil

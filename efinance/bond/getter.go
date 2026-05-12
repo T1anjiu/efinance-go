@@ -3,6 +3,7 @@ package bond
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -84,7 +85,7 @@ func GetBaseInfoMulti(ctx context.Context, bondCodes []string) ([]BondInfo, erro
 	}
 
 	if len(errs) > 0 {
-		return infos, errs[0]
+		return infos, fmt.Errorf("批量请求 %d 个失败: %v", len(errs), errs)
 	}
 
 	return infos, nil
@@ -116,17 +117,17 @@ func parseBondBaseInfo(raw *json.RawMessage) (*BondInfo, error) {
 	var resp struct {
 		Result struct {
 			Data []struct {
-				SECURITY_CODE     string `json:"SECURITY_CODE"`
+				SECURITY_CODE      string `json:"SECURITY_CODE"`
 				SECURITY_NAME_ABBR string `json:"SECURITY_NAME_ABBR"`
-				正股代码           string `json:"正股代码"`
-				正股名称           string `json:"正股名称"`
-				债券评级           string `json:"债券评级"`
-				申购日期           string `json:"申购日期"`
-				发行规模           string `json:"发行规模"`
-				上市日期           string `json:"上市日期"`
-				到期日期           string `json:"到期日期"`
-				期限               string `json:"期限"`
-				利率说明           string `json:"利率说明"`
+				CONVERT_STOCK_CODE string `json:"CONVERT_STOCK_CODE"`
+				SECURITY_SHORT_NAME string `json:"SECURITY_SHORT_NAME"`
+				RATING             string `json:"RATING"`
+				PUBLIC_START_DATE  string `json:"PUBLIC_START_DATE"`
+				ACTUAL_ISSUE_SCALE string `json:"ACTUAL_ISSUE_SCALE"`
+				LISTING_DATE       string `json:"LISTING_DATE"`
+				EXPIRE_DATE        string `json:"EXPIRE_DATE"`
+				BOND_EXPIRE        string `json:"BOND_EXPIRE"`
+				INTEREST_RATE_EXPLAIN string `json:"INTEREST_RATE_EXPLAIN"`
 			} `json:"data"`
 		} `json:"result"`
 	}
@@ -140,21 +141,21 @@ func parseBondBaseInfo(raw *json.RawMessage) (*BondInfo, error) {
 	}
 
 	d := resp.Result.Data[0]
-	publishScale, _ := strconv.ParseFloat(d.发行规模, 64)
-	term, _ := strconv.Atoi(d.期限)
+	publishScale, _ := strconv.ParseFloat(d.ACTUAL_ISSUE_SCALE, 64)
+	term, _ := strconv.Atoi(d.BOND_EXPIRE)
 
 	return &BondInfo{
 		Code:         d.SECURITY_CODE,
 		Name:         d.SECURITY_NAME_ABBR,
-		StockCode:    d.正股代码,
-		StockName:    d.正股名称,
-		Rating:       d.债券评级,
-		PublishDate:  d.申购日期,
+		StockCode:    d.CONVERT_STOCK_CODE,
+		StockName:    d.SECURITY_SHORT_NAME,
+		Rating:       d.RATING,
+		PublishDate:  d.PUBLIC_START_DATE,
 		PublishScale: publishScale,
-		ListedDate:   d.上市日期,
-		ExpireDate:   d.到期日期,
+		ListedDate:   d.LISTING_DATE,
+		ExpireDate:   d.EXPIRE_DATE,
 		Term:         term,
-		RateDesc:     d.利率说明,
+		RateDesc:     d.INTEREST_RATE_EXPLAIN,
 	}, nil
 }
 
@@ -163,17 +164,17 @@ func parseBondBaseInfoList(raw *json.RawMessage) ([]BondInfo, error) {
 	var resp struct {
 		Result struct {
 			Data []struct {
-				SECURITY_CODE     string `json:"SECURITY_CODE"`
+				SECURITY_CODE      string `json:"SECURITY_CODE"`
 				SECURITY_NAME_ABBR string `json:"SECURITY_NAME_ABBR"`
-				正股代码           string `json:"正股代码"`
-				正股名称           string `json:"正股名称"`
-				债券评级           string `json:"债券评级"`
-				申购日期           string `json:"申购日期"`
-				发行规模           string `json:"发行规模"`
-				上市日期           string `json:"上市日期"`
-				到期日期           string `json:"到期日期"`
-				期限               string `json:"期限"`
-				利率说明           string `json:"利率说明"`
+				CONVERT_STOCK_CODE string `json:"CONVERT_STOCK_CODE"`
+				SECURITY_SHORT_NAME string `json:"SECURITY_SHORT_NAME"`
+				RATING             string `json:"RATING"`
+				PUBLIC_START_DATE  string `json:"PUBLIC_START_DATE"`
+				ACTUAL_ISSUE_SCALE string `json:"ACTUAL_ISSUE_SCALE"`
+				LISTING_DATE       string `json:"LISTING_DATE"`
+				EXPIRE_DATE        string `json:"EXPIRE_DATE"`
+				BOND_EXPIRE        string `json:"BOND_EXPIRE"`
+				INTEREST_RATE_EXPLAIN string `json:"INTEREST_RATE_EXPLAIN"`
 			} `json:"data"`
 		} `json:"result"`
 	}
@@ -184,21 +185,21 @@ func parseBondBaseInfoList(raw *json.RawMessage) ([]BondInfo, error) {
 
 	infos := make([]BondInfo, 0, len(resp.Result.Data))
 	for _, d := range resp.Result.Data {
-		publishScale, _ := strconv.ParseFloat(d.发行规模, 64)
-		term, _ := strconv.Atoi(d.期限)
+		publishScale, _ := strconv.ParseFloat(d.ACTUAL_ISSUE_SCALE, 64)
+		term, _ := strconv.Atoi(d.BOND_EXPIRE)
 
 		infos = append(infos, BondInfo{
 			Code:         d.SECURITY_CODE,
 			Name:         d.SECURITY_NAME_ABBR,
-			StockCode:    d.正股代码,
-			StockName:    d.正股名称,
-			Rating:       d.债券评级,
-			PublishDate:  d.申购日期,
+			StockCode:    d.CONVERT_STOCK_CODE,
+			StockName:    d.SECURITY_SHORT_NAME,
+			Rating:       d.RATING,
+			PublishDate:  d.PUBLIC_START_DATE,
 			PublishScale: publishScale,
-			ListedDate:   d.上市日期,
-			ExpireDate:   d.到期日期,
+			ListedDate:   d.LISTING_DATE,
+			ExpireDate:   d.EXPIRE_DATE,
 			Term:         term,
-			RateDesc:     d.利率说明,
+			RateDesc:     d.INTEREST_RATE_EXPLAIN,
 		})
 	}
 

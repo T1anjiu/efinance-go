@@ -84,17 +84,19 @@ func (c *HTTPClient) GetJSON(ctx context.Context, url string, params map[string]
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
-		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("HTTP状态码错误: %d", resp.StatusCode)
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if readErr != nil {
+			lastErr = fmt.Errorf("读取响应失败: %w", readErr)
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			lastErr = fmt.Errorf("读取响应失败: %w", err)
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("HTTP状态码错误: %d", resp.StatusCode)
+			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
@@ -116,11 +118,12 @@ func (c *HTTPClient) GetJSON(ctx context.Context, url string, params map[string]
 			return nil, errors.ErrNoData
 		}
 
-		raw, ok := data.(json.RawMessage)
-		if !ok {
-			return nil, errors.ErrNoData
+		rawBytes, err := json.Marshal(data)
+		if err != nil {
+			lastErr = fmt.Errorf("重新序列化数据失败: %w", err)
+			continue
 		}
-
+		raw := json.RawMessage(rawBytes)
 		return &raw, nil
 	}
 
@@ -172,17 +175,19 @@ func (c *HTTPClient) PostJSON(ctx context.Context, url string, data interface{},
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
-		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("HTTP状态码错误: %d", resp.StatusCode)
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if readErr != nil {
+			lastErr = fmt.Errorf("读取响应失败: %w", readErr)
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			lastErr = fmt.Errorf("读取响应失败: %w", err)
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("HTTP状态码错误: %d", resp.StatusCode)
+			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
@@ -197,11 +202,12 @@ func (c *HTTPClient) PostJSON(ctx context.Context, url string, data interface{},
 			return nil, errors.ErrNoData
 		}
 
-		raw, ok := data.(json.RawMessage)
-		if !ok {
-			return nil, errors.ErrNoData
+		rawBytes, err := json.Marshal(data)
+		if err != nil {
+			lastErr = fmt.Errorf("重新序列化数据失败: %w", err)
+			continue
 		}
-
+		raw := json.RawMessage(rawBytes)
 		return &raw, nil
 	}
 
@@ -244,17 +250,19 @@ func (c *HTTPClient) PostForm(ctx context.Context, url string, data url.Values, 
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
-		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("HTTP状态码错误: %d", resp.StatusCode)
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if readErr != nil {
+			lastErr = fmt.Errorf("读取响应失败: %w", readErr)
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			lastErr = fmt.Errorf("读取响应失败: %w", err)
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("HTTP状态码错误: %d", resp.StatusCode)
+			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
@@ -269,11 +277,12 @@ func (c *HTTPClient) PostForm(ctx context.Context, url string, data url.Values, 
 			return nil, errors.ErrNoData
 		}
 
-		raw, ok := data.(json.RawMessage)
-		if !ok {
-			return nil, errors.ErrNoData
+		rawBytes, err := json.Marshal(data)
+		if err != nil {
+			lastErr = fmt.Errorf("重新序列化数据失败: %w", err)
+			continue
 		}
-
+		raw := json.RawMessage(rawBytes)
 		return &raw, nil
 	}
 
